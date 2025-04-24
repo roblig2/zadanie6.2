@@ -3,77 +3,38 @@ from sqlite3 import Error
 
 
 def create_connection(db_file):
-    """ create a database connection to the SQLite database
-        specified by db_file
-    :param db_file: database file
-    :return: Connection object or None
-    """
-    conn = None
     try:
-        conn = sqlite3.connect(db_file)
-        return conn
+        return sqlite3.connect(db_file)
     except Error as e:
         print(e)
-
-    return conn
+    return None
 
 
 def execute_sql(conn, sql):
-    """ Execute sql
-    :param conn: Connection object
-    :param sql: a SQL script
-    :return:
-    """
     try:
-        c = conn.cursor()
-        c.execute(sql)
+        cur = conn.cursor()
+        cur.execute(sql)
     except Error as e:
         print(e)
 
 
-def add_project(conn, project):
-    """
-    Create a new project into the projects table
-    :param conn:
-    :param project:
-    :return: project id
-    """
-    sql = '''INSERT INTO projects(nazwa, start_date, end_date)
+def add_book(conn, book):
+    sql = '''INSERT INTO books(title, author, published_year)
              VALUES(?,?,?)'''
     cur = conn.cursor()
-    cur.execute(sql, project)
+    cur.execute(sql, book)
     conn.commit()
     return cur.lastrowid
 
 
-def add_task(conn, task):
-    """
-    Create a new project into the projects table
-    :param conn:
-    :param task:
-    :return: project id
-    """
-    sql = '''INSERT INTO tasks(project_id, nazwa, opis, status, start_date, end_date)
-             VALUES(?,?,?,?,?,?)'''
+def add_review(conn, review):
+    sql = '''INSERT INTO reviews(book_id, reviewer, rating, comment)
+             VALUES(?,?,?,?)'''
     cur = conn.cursor()
-    cur.execute(sql, task)
+    cur.execute(sql, review)
     conn.commit()
 
     return cur.lastrowid
-
-
-def select_task_by_status(conn, status):
-    """
-    Query tasks by priority
-    :param conn: the Connection object
-    :param status:
-    :return:
-    """
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM tasks WHERE status=?", (status,))
-
-    rows = cur.fetchall()
-    return rows
 
 
 def select_all(conn, table):
@@ -110,20 +71,9 @@ def select_where(conn, table, **query):
 
 
 def delete_where(conn, table, **kwargs):
-    """
-    Delete from table where attributes from
-    :param conn:  Connection to the SQLite database
-    :param table: table name
-    :param kwargs: dict of attributes and values
-    :return:
-    """
-    qs = []
-    values = tuple()
-    for k, v in kwargs.items():
-        qs.append(f"{k}=?")
-        values += (v,)
+    qs = [f"{k}=?" for k in kwargs]
+    values = tuple(kwargs.values())
     q = " AND ".join(qs)
-
     sql = f'DELETE FROM {table} WHERE {q}'
     cur = conn.cursor()
     cur.execute(sql, values)
@@ -132,57 +82,50 @@ def delete_where(conn, table, **kwargs):
 
 
 def delete_all(conn, table):
-    """
-    Delete all rows from table
-    :param conn: Connection to the SQLite database
-    :param table: table name
-    :return:
-    """
-    sql = f'DELETE FROM {table}'
     cur = conn.cursor()
-    cur.execute(sql)
+    cur.execute(f'DELETE FROM {table}')
     conn.commit()
     print("Deleted")
 
 
 if __name__ == "__main__":
+    create_books_sql = """
+    CREATE TABLE IF NOT EXISTS books (
+        id INTEGER PRIMARY KEY,
+        title TEXT NOT NULL,
+        author TEXT NOT NULL,
+        published_year INTEGER
+    );
+    """
 
-    create_projects_sql = """
-   -- projects table
-   CREATE TABLE IF NOT EXISTS projects (
-      id integer PRIMARY KEY,
-      nazwa text NOT NULL,
-      start_date text,
-      end_date text
-   );
-   """
+    create_reviews_sql = """
+    CREATE TABLE IF NOT EXISTS reviews (
+        id INTEGER PRIMARY KEY,
+        book_id INTEGER NOT NULL,
+        reviewer TEXT NOT NULL,
+        rating INTEGER CHECK(rating >= 1 AND rating <= 5),
+        comment TEXT,
+        FOREIGN KEY (book_id) REFERENCES books(id)
+    );
+    """
 
-    create_tasks_sql = """
-   -- zadanie table
-   CREATE TABLE IF NOT EXISTS tasks (
-      id integer PRIMARY KEY,
-      project_id integer NOT NULL,
-      nazwa VARCHAR(250) NOT NULL,
-      opis TEXT,
-      status VARCHAR(15) NOT NULL,
-      start_date text NOT NULL,
-      end_date text NOT NULL,
-      FOREIGN KEY (project_id) REFERENCES projects (id)
-   );
-   """
-
-    db_file = "database.db"
+    db_file = "library.db"
 
     conn = create_connection(db_file)
-    if conn is not None:
-        execute_sql(conn, create_projects_sql)
-        execute_sql(conn, create_tasks_sql)
-        project = ("Powtórka z angielskiego", "2020-05-11 00:00:00", "2020-05-13 00:00:00")
-        pr_id = add_project(conn, project)
-        task = (pr_id, "Czas przeszły", "nauczyć się czasu past perfect", "do wykonania", "2020-05-11 00:00:00",
-                "2020-05-13 00:00:00")
-        task_id = add_task(conn, task)
-        print(select_all(conn, "tasks"))
-        delete_where(conn, "tasks", id=3)
-        delete_all(conn, "tasks")
+    if conn:
+        execute_sql(conn, create_books_sql)
+        execute_sql(conn, create_reviews_sql)
+
+        book = ("Władca Pierścieni", "J.R.R. Tolkien", 1954)
+        book_id = add_book(conn, book)
+
+        review = (book_id, "Ania", 5, "Arcydzieło literatury fantasy!")
+        review_id = add_review(conn, review)
+
+        print(select_all(conn, "books"))
+        print(select_all(conn, "reviews"))
+
+        # delete_where(conn, "reviews", id=1)
+        # delete_all(conn, "reviews")
+
         conn.close()
